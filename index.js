@@ -205,12 +205,14 @@ const ticketsFile = path.join(
 
 
 if (!fs.existsSync(dataFolder)) {
+
     fs.mkdirSync(
         dataFolder,
         {
             recursive: true
         }
     );
+
 }
 
 
@@ -223,6 +225,10 @@ if (!fs.existsSync(ticketsFile)) {
 
 }
 
+
+// ============================================================
+// CARGAR TICKETS
+// ============================================================
 
 function loadTickets() {
 
@@ -244,6 +250,10 @@ function loadTickets() {
 }
 
 
+// ============================================================
+// GUARDAR TICKETS
+// ============================================================
+
 function saveTickets(data) {
 
     fs.writeFileSync(
@@ -259,7 +269,7 @@ function saveTickets(data) {
 
 
 // ============================================================
-// FUNCIONES AUXILIARES
+// STAFF
 // ============================================================
 
 function isStaff(member) {
@@ -273,9 +283,14 @@ function isStaff(member) {
 }
 
 
+// ============================================================
+// OBTENER TICKET
+// ============================================================
+
 function getTicket(channelId) {
 
-    const tickets = loadTickets();
+    const tickets =
+        loadTickets();
 
     return Object.values(tickets).find(
         ticket =>
@@ -286,6 +301,10 @@ function getTicket(channelId) {
 }
 
 
+// ============================================================
+// OBTENER CANAL DE LOG
+// ============================================================
+
 function getLogChannelId(type) {
 
     return LOG_CHANNELS[type] ||
@@ -294,12 +313,18 @@ function getLogChannelId(type) {
 }
 
 
+// ============================================================
+// ENVIAR LOG
+// ============================================================
+
 async function sendLog(type, embed) {
 
     try {
 
         const guild =
-            client.guilds.cache.get(GUILD_ID);
+            client.guilds.cache.get(
+                GUILD_ID
+            );
 
         if (!guild) return;
 
@@ -327,7 +352,7 @@ async function sendLog(type, embed) {
 
 
 // ============================================================
-// COMANDOS SLASH
+// COMANDOS
 // ============================================================
 
 const commands = [
@@ -453,7 +478,11 @@ client.once(
         );
 
         console.log(
-            `📁 Categorías existentes: ${Object.values(TICKET_TYPES).filter(t => t.category).length}`
+            `📁 Categorías configuradas: ${
+                Object.values(TICKET_TYPES)
+                    .filter(ticket => ticket.category)
+                    .length
+            }`
         );
 
         await registerCommands();
@@ -473,6 +502,48 @@ client.once(
 
     }
 );
+
+
+// ============================================================
+// OBTENER SIGUIENTE NÚMERO DEL TICKET
+// ============================================================
+
+function getNextTicketNumber(
+    tickets,
+    ticketType
+) {
+
+    let highestNumber = 0;
+
+
+    for (
+        const ticket
+        of Object.values(tickets)
+    ) {
+
+        if (
+            ticket.type !== ticketType
+        ) {
+            continue;
+        }
+
+
+        if (
+            typeof ticket.ticketNumber === "number" &&
+            ticket.ticketNumber > highestNumber
+        ) {
+
+            highestNumber =
+                ticket.ticketNumber;
+
+        }
+
+    }
+
+
+    return highestNumber + 1;
+
+}
 
 
 // ============================================================
@@ -501,11 +572,20 @@ async function createTicket(
             content:
                 "❌ Tipo de ticket inválido.",
 
-            ephemeral: true
+            ephemeral:
+                true
 
         });
 
     }
+
+
+    // ========================================================
+    // CARGAR TICKETS
+    // ========================================================
+
+    const tickets =
+        loadTickets();
 
 
     // ========================================================
@@ -526,7 +606,8 @@ async function createTicket(
                 `❌ No encontré la categoría de **${config.name}**.\n\n` +
                 `ID configurado: \`${config.category || "NO CONFIGURADO"}\``,
 
-            ephemeral: true
+            ephemeral:
+                true
 
         });
 
@@ -534,7 +615,7 @@ async function createTicket(
 
 
     // ========================================================
-    // VERIFICAR QUE SEA UNA CATEGORÍA
+    // VERIFICAR CATEGORÍA
     // ========================================================
 
     if (
@@ -547,7 +628,8 @@ async function createTicket(
             content:
                 `❌ El ID configurado para **${config.name}** no corresponde a una categoría de Discord.`,
 
-            ephemeral: true
+            ephemeral:
+                true
 
         });
 
@@ -555,7 +637,18 @@ async function createTicket(
 
 
     // ========================================================
-    // NOMBRE DEL TICKET
+    // NÚMERO DEL TICKET
+    // ========================================================
+
+    const ticketNumber =
+        getNextTicketNumber(
+            tickets,
+            ticketType
+        );
+
+
+    // ========================================================
+    // NOMBRE DEL USUARIO
     // ========================================================
 
     const username =
@@ -565,36 +658,40 @@ async function createTicket(
                 /[^a-z0-9]/g,
                 "-"
             )
-            .slice(0, 40);
+            .replace(
+                /-+/g,
+                "-"
+            )
+            .replace(
+                /^-|-$/g,
+                ""
+            )
+            .slice(0, 35);
 
 
-    const uniqueSuffix =
-        Date.now()
-            .toString(36)
-            .slice(-6);
-
+    // ========================================================
+    // NOMBRE FINAL
+    // ========================================================
+    //
+    // EJEMPLO:
+    //
+    // soporte-morx-1
+    // soporte-morx-2
+    // reportes-morx-1
+    //
+    // ========================================================
 
     const channelName =
-        `${ticketType}-${username}-${uniqueSuffix}`;
+        `${ticketType}-${username}-${ticketNumber}`;
 
 
     // ========================================================
-    // PERMISOS DEL NUEVO CANAL
-    // ========================================================
-    //
-    // IMPORTANTE:
-    // Las categorías YA EXISTEN.
-    //
-    // Aquí solamente creamos el canal del ticket
-    // dentro de la categoría correspondiente.
-    //
-    // Los permisos se colocan directamente durante
-    // la creación del canal.
+    // PERMISOS
     // ========================================================
 
     const permissions = [
 
-        // @everyone NO puede ver el ticket
+        // @everyone NO VE EL TICKET
         {
             id:
                 guild.roles.everyone.id,
@@ -605,7 +702,7 @@ async function createTicket(
         },
 
 
-        // USUARIO DEL TICKET
+        // USUARIO
         {
             id:
                 user.id,
@@ -629,7 +726,7 @@ async function createTicket(
 
 
     // ========================================================
-    // LOS 4 ROLES STAFF
+    // ROLES STAFF
     // ========================================================
 
     for (
@@ -639,7 +736,8 @@ async function createTicket(
 
         permissions.push({
 
-            id: roleId,
+            id:
+                roleId,
 
             allow: [
 
@@ -696,7 +794,7 @@ async function createTicket(
 
 
     // ========================================================
-    // CREAR CANAL
+    // CREAR CANAL DENTRO DE LA CATEGORÍA EXISTENTE
     // ========================================================
 
     try {
@@ -710,8 +808,6 @@ async function createTicket(
                 type:
                     ChannelType.GuildText,
 
-                // IMPORTANTE:
-                // Usa la categoría que YA EXISTE
                 parent:
                     category.id,
 
@@ -719,7 +815,6 @@ async function createTicket(
                     permissions
 
             });
-
 
     } catch (error) {
 
@@ -754,7 +849,7 @@ async function createTicket(
 
 
         errorMessage +=
-            "\n\nRevisa que el rol del bot esté por encima de los roles que intenta administrar y que tenga **Gestionar canales**.";
+            "\n\nRevisa que el bot tenga **Gestionar canales** y acceso a la categoría.";
 
 
         return interaction.reply({
@@ -762,7 +857,8 @@ async function createTicket(
             content:
                 errorMessage,
 
-            ephemeral: true
+            ephemeral:
+                true
 
         });
 
@@ -770,21 +866,13 @@ async function createTicket(
 
 
     // ========================================================
-    // GUARDAR TICKET
+    // GUARDAR INFORMACIÓN DEL TICKET
     // ========================================================
 
-    const tickets =
-        loadTickets();
-
-
-    const ticketId =
-        `${Date.now()}`;
-
-
-    tickets[ticketId] = {
+    tickets[ticketNumber + "-" + Date.now()] = {
 
         id:
-            ticketId,
+            ticketNumber + "-" + Date.now(),
 
         guildId:
             guild.id,
@@ -803,6 +891,9 @@ async function createTicket(
 
         typeName:
             config.name,
+
+        ticketNumber:
+            ticketNumber,
 
         status:
             "open",
@@ -823,7 +914,7 @@ async function createTicket(
 
 
     // ========================================================
-    // EMBED DEL TICKET
+    // EMBED
     // ========================================================
 
     const embed =
@@ -881,6 +972,17 @@ async function createTicket(
 
                 {
                     name:
+                        "🎫 Número",
+
+                    value:
+                        `#${ticketNumber}`,
+
+                    inline:
+                        true
+                },
+
+                {
+                    name:
                         "📊 Estado",
 
                     value:
@@ -906,7 +1008,7 @@ async function createTicket(
             .setFooter({
 
                 text:
-                    `Auren RP • Ticket #${ticketId}`
+                    `Auren RP • ${config.name} #${ticketNumber}`
 
             })
 
@@ -1020,9 +1122,31 @@ async function createTicket(
         );
 
 
-        delete tickets[ticketId];
+        // Buscar y borrar el ticket guardado
+        const currentTickets =
+            loadTickets();
 
-        saveTickets(tickets);
+
+        const savedTicket =
+            Object.entries(
+                currentTickets
+            ).find(
+                ([key, ticket]) =>
+                    ticket.channelId === channel.id
+            );
+
+
+        if (savedTicket) {
+
+            delete currentTickets[
+                savedTicket[0]
+            ];
+
+            saveTickets(
+                currentTickets
+            );
+
+        }
 
 
         try {
@@ -1038,9 +1162,10 @@ async function createTicket(
 
             content:
                 "❌ El canal fue creado, pero el bot no pudo enviar el mensaje dentro del ticket.\n\n" +
-                "Esto normalmente significa que existe un **deny explícito en la categoría o en el canal**.",
+                "Revisa los permisos de la categoría y del bot.",
 
-            ephemeral: true
+            ephemeral:
+                true
 
         });
 
@@ -1048,13 +1173,13 @@ async function createTicket(
 
 
     // ========================================================
-    // RESPUESTA AL USUARIO
+    // RESPUESTA
     // ========================================================
 
     await interaction.reply({
 
         content:
-            `✅ Tu ticket de **${config.name}** ha sido creado correctamente: ${channel}`,
+            `✅ Tu ticket **#${ticketNumber}** de **${config.name}** ha sido creado correctamente: ${channel}`,
 
         ephemeral:
             true
@@ -1103,6 +1228,17 @@ async function createTicket(
 
                 {
                     name:
+                        "🎫 Número",
+
+                    value:
+                        `#${ticketNumber}`,
+
+                    inline:
+                        true
+                },
+
+                {
+                    name:
                         "📊 Estado",
 
                     value:
@@ -1128,7 +1264,7 @@ async function createTicket(
             .setFooter({
 
                 text:
-                    `Ticket ID: ${ticketId}`
+                    `Ticket ${config.name} #${ticketNumber}`
 
             })
 
@@ -1204,13 +1340,40 @@ async function claimTicket(interaction) {
         loadTickets();
 
 
-    tickets[ticket.id].claimed =
+    const ticketEntry =
+        Object.entries(tickets).find(
+            ([, savedTicket]) =>
+                savedTicket.channelId ===
+                interaction.channel.id
+        );
+
+
+    if (!ticketEntry) {
+
+        return interaction.reply({
+
+            content:
+                "❌ No encontré la información de este ticket.",
+
+            ephemeral:
+                true
+
+        });
+
+    }
+
+
+    const ticketKey =
+        ticketEntry[0];
+
+
+    tickets[ticketKey].claimed =
         true;
 
-    tickets[ticket.id].claimedBy =
+    tickets[ticketKey].claimedBy =
         interaction.user.id;
 
-    tickets[ticket.id].claimedAt =
+    tickets[ticketKey].claimedAt =
         new Date().toISOString();
 
 
@@ -1261,6 +1424,17 @@ async function claimTicket(interaction) {
 
                     value:
                         config.name,
+
+                    inline:
+                        true
+                },
+
+                {
+                    name:
+                        "🎫 Número",
+
+                    value:
+                        `#${ticket.ticketNumber}`,
 
                     inline:
                         true
@@ -1352,6 +1526,17 @@ async function claimTicket(interaction) {
 
                 {
                     name:
+                        "🎫 Número",
+
+                    value:
+                        `#${ticket.ticketNumber}`,
+
+                    inline:
+                        true
+                },
+
+                {
+                    name:
                         "📌 Ticket",
 
                     value:
@@ -1435,17 +1620,44 @@ async function unclaimTicket(interaction) {
         loadTickets();
 
 
+    const ticketEntry =
+        Object.entries(tickets).find(
+            ([, savedTicket]) =>
+                savedTicket.channelId ===
+                interaction.channel.id
+        );
+
+
+    if (!ticketEntry) {
+
+        return interaction.reply({
+
+            content:
+                "❌ No encontré la información de este ticket.",
+
+            ephemeral:
+                true
+
+        });
+
+    }
+
+
+    const ticketKey =
+        ticketEntry[0];
+
+
     const previousStaff =
-        ticket.claimedBy;
+        tickets[ticketKey].claimedBy;
 
 
-    tickets[ticket.id].claimed =
+    tickets[ticketKey].claimed =
         false;
 
-    tickets[ticket.id].claimedBy =
+    tickets[ticketKey].claimedBy =
         null;
 
-    tickets[ticket.id].claimedAt =
+    tickets[ticketKey].claimedAt =
         null;
 
 
@@ -1546,6 +1758,17 @@ async function unclaimTicket(interaction) {
 
                     inline:
                         true
+                },
+
+                {
+                    name:
+                        "🎫 Número",
+
+                    value:
+                        `#${ticket.ticketNumber}`,
+
+                    inline:
+                        true
                 }
 
             )
@@ -1611,17 +1834,33 @@ async function closeTicket(interaction) {
         loadTickets();
 
 
-    tickets[ticket.id].status =
-        "closed";
-
-    tickets[ticket.id].closedBy =
-        interaction.user.id;
-
-    tickets[ticket.id].closedAt =
-        new Date().toISOString();
+    const ticketEntry =
+        Object.entries(tickets).find(
+            ([, savedTicket]) =>
+                savedTicket.channelId ===
+                interaction.channel.id
+        );
 
 
-    saveTickets(tickets);
+    if (ticketEntry) {
+
+        const ticketKey =
+            ticketEntry[0];
+
+
+        tickets[ticketKey].status =
+            "closed";
+
+        tickets[ticketKey].closedBy =
+            interaction.user.id;
+
+        tickets[ticketKey].closedAt =
+            new Date().toISOString();
+
+
+        saveTickets(tickets);
+
+    }
 
 
     const logEmbed =
@@ -1654,6 +1893,17 @@ async function closeTicket(interaction) {
 
                     value:
                         config.name,
+
+                    inline:
+                        true
+                },
+
+                {
+                    name:
+                        "🎫 Número",
+
+                    value:
+                        `#${ticket.ticketNumber}`,
 
                     inline:
                         true
@@ -1808,7 +2058,7 @@ async function ticketMessage(interaction) {
             .setFooter({
 
                 text:
-                    `Auren RP • ${config.name} • ${interaction.user.tag}`
+                    `Auren RP • ${config.name} #${ticket.ticketNumber} • ${interaction.user.tag}`
 
             })
 
@@ -2043,7 +2293,7 @@ async function removeUser(interaction) {
 
 
 // ============================================================
-// PANEL DE TICKETS
+// PANEL
 // ============================================================
 
 async function sendPanel(interaction) {
@@ -2268,7 +2518,7 @@ async function sendPanel(interaction) {
         await interaction.reply({
 
             content:
-                "❌ No pude enviar el panel. Revisa que el bot tenga permisos para enviar mensajes y adjuntar archivos en ese canal.",
+                "❌ No pude enviar el panel. Revisa los permisos del bot en ese canal.",
 
             ephemeral:
                 true
@@ -2463,7 +2713,7 @@ client.on(
 
 
 // ============================================================
-// COMPROBAR .ENV
+// COMPROBAR CONFIGURACIÓN
 // ============================================================
 
 if (!TOKEN) {
