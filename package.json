@@ -1,0 +1,13 @@
+{
+  "name": "auren-rp-ticket-bot",
+  "version": "1.0.0",
+  "description": "Auren RP Ticket System",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.27.0",
+    "dotenv": "^17.4.2"
+  }
+}
